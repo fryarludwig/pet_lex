@@ -58,7 +58,6 @@ class FileStructure:
             temp_lines = user_file.readlines()
             for line in temp_lines:
                 cleaned_line = RE_SANITIZE_LINES.sub('', line)
-                # cleaned_line = line.strip()
                 if len(cleaned_line) > 0:
                     self.lines.append(cleaned_line)
             return True
@@ -66,31 +65,36 @@ class FileStructure:
             self.lines = []
             return False
 
+    def determine_type(self, line):
+        line_type = None
+        if RE_FUNCTION_DECL.match(line) is not None:
+            return "function", Function(RE_FUNCTION_DECL.match(line).groupdict())
+        if RE_CLASS_DECL.match(line) is not None:
+            return "class", Class(RE_CLASS_DECL.match(line).groupdict())
+        if RE_IDENTIFIER.match(line) is not None:
+            return "variable", Var(RE_IDENTIFIER.match(line).groupdict())
+        return "None", None
+
     def parse_file(self):
         line_count = len(self.lines)
         line_number = 0
 
         while line_number < line_count:
-            print line_number
             line = self.lines[line_number]
-            parsed_class = self.get_class(line)
-            if parsed_class is not None:
-                self.classes[parsed_class.name] = parsed_class
-                line_number = self.parse_class(line_number, parsed_class)
+
+            line_type, mystery_object = self.determine_type(line)
+
+            if line_type == "None":
+                line_number += 1
                 continue
 
-            temp_obj = self.get_function(line)
-            if temp_obj is not None:
-                self.functions[temp_obj.name] = temp_obj
-                # function_nest.append(temp_obj)
-                continue
+            if line_type == "class":
+                self.classes[mystery_object.name] = mystery_object
+                line_number = self.parse_class(line_number, mystery_object)
+            elif line_type == "function":
+                self.functions[mystery_object.name] = mystery_object
+                line_number += 1
 
-            temp_obj = self.get_variable(line)
-            if temp_obj is not None:
-                self.variables[temp_obj.name] = temp_obj
-                # function_nest.append(temp_obj)
-                continue
-            print line_number
             line_number += 1
 
         return str(self)
@@ -120,20 +124,38 @@ class FileStructure:
         current_line = line_number
         class_scope = 0
 
-        while current_line < len(self.lines) and class_scope >= 0:
+        while current_line < len(self.lines) and class_scope > 0:
             line = self.lines[current_line]
 
-            if '{' in line:
-                class_scope += 1
-            if '}' in line:
-                class_scope -= 1
+            class_scope += line.count('}') - line.count('}')
+            print class_scope
 
             current_line += 1
 
-            # temp_obj = self.get_class(line)
-            # if temp_obj is not None:
-            #     # self.classes[temp_obj.name] = temp_obj
-            #     continue
+            line_type, mystery_object = self.determine_type(line)
+
+            if line_type == 'function':
+                line_number = self.parse_function(line_number, mystery_object)
+            elif line_type == 'variable':
+                line_number += 1
+                class_obj.variables[mystery_object.name] = mystery_object
+                continue
+
+        return current_line
+
+    def parse_function(self, line_number, func):
+        current_line = line_number
+        func_scope = 0
+
+        while current_line < len(self.lines) and func_scope > 0:
+            line = self.lines[current_line]
+
+            print "In class {}".format(class_obj.name)
+
+            func_scope += line.count('}') - line.count('}')
+            print func_scope
+
+            current_line += 1
 
             temp_obj = self.get_function(line)
             if temp_obj is not None:
@@ -146,7 +168,6 @@ class FileStructure:
                 continue
 
         return current_line
-
 
 
     def __str__(self):
