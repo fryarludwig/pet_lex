@@ -22,7 +22,7 @@ RE_FUNCTION_DECL = re.compile("(?P<access>(public|private|protected)(\s+static)?
 RE_IDENTIFIER = re.compile("(?P<type>[a-zA-Z]\w+)\s{1,}(?P<name>[a-zA-Z]\w*)(\s*=\s*(?P<value>[\"'\w]+))?\s*;")
 RE_FUNC_PARAMS = re.compile("((?P<type>[a-zA-Z][\w\[\]]+)\s+(?P<name>\w+)\s*(=\s*(?P<value>[\w'\"]+))?(,\s*)?)")
 
-RE_LINE_COMMENT = re.compile("(?P<comment>[/]{2}.*$)")
+RE_SANITIZE_LINES = re.compile("((?P<comment>[/]{2}.*$)|(^\s+)|(\s+$))")
 
 # TEST_FILE = "HelloWorld.java"
 TEST_FILE = "test_input.java"
@@ -57,8 +57,8 @@ class FileStructure:
             user_file = open(file_name, mode='r')
             temp_lines = user_file.readlines()
             for line in temp_lines:
-                line = RE_LINE_COMMENT.sub('', line)
-                cleaned_line = line.strip()
+                cleaned_line = RE_SANITIZE_LINES.sub('', line)
+                # cleaned_line = line.strip()
                 if len(cleaned_line) > 0:
                     self.lines.append(cleaned_line)
             return True
@@ -67,37 +67,31 @@ class FileStructure:
             return False
 
     def parse_file(self):
-        nest_level = 0
-
-        stack = []
-
-        class_stack = []
-        function_nest = []
-
-        immediate_scope = "None"
-
         line_count = len(self.lines)
+        line_number = 0
 
-        for line_number in range(0, line_count):
+        while line_number < line_count:
+            print line_number
             line = self.lines[line_number]
             parsed_class = self.get_class(line)
             if parsed_class is not None:
                 self.classes[parsed_class.name] = parsed_class
-                self.parse_class(line_number + 1, parsed_class)
-                class_stack.append(parsed_class)
+                line_number = self.parse_class(line_number, parsed_class)
                 continue
 
             temp_obj = self.get_function(line)
             if temp_obj is not None:
                 self.functions[temp_obj.name] = temp_obj
-                function_nest.append(temp_obj)
+                # function_nest.append(temp_obj)
                 continue
 
             temp_obj = self.get_variable(line)
             if temp_obj is not None:
                 self.variables[temp_obj.name] = temp_obj
-                function_nest.append(temp_obj)
+                # function_nest.append(temp_obj)
                 continue
+            print line_number
+            line_number += 1
 
         return str(self)
 
@@ -123,20 +117,23 @@ class FileStructure:
         return temp_obj
 
     def parse_class(self, line_number, class_obj):
-        # Let's iterate through the lines
-        # if we have a new class, let's call parse class
-        # if we have a function, let's get that and add it to our class
-        # if we have a variable, same
+        current_line = line_number
+        class_scope = 0
 
+        while current_line < len(self.lines) and class_scope >= 0:
+            line = self.lines[current_line]
 
+            if '{' in line:
+                class_scope += 1
+            if '}' in line:
+                class_scope -= 1
 
-        for i in range(line_number, len(self.lines)):
-            line = self.lines[i]
+            current_line += 1
 
-            temp_obj = self.get_class(line)
-            if temp_obj is not None:
-                # self.classes[temp_obj.name] = temp_obj
-                continue
+            # temp_obj = self.get_class(line)
+            # if temp_obj is not None:
+            #     # self.classes[temp_obj.name] = temp_obj
+            #     continue
 
             temp_obj = self.get_function(line)
             if temp_obj is not None:
@@ -148,6 +145,9 @@ class FileStructure:
                 self.variables[temp_obj.name] = temp_obj
                 continue
 
+        return current_line
+
+
 
     def __str__(self):
         result_str = "File: {}".format(self.file_name)
@@ -158,10 +158,10 @@ class FileStructure:
             result_str += "\nFunctions: "
             for key in self.functions.keys():
                 result_str += "\n{}{}".format(nest(1), self.functions[key])
-        if len(self.variables) > 0:
-            result_str += "\nGlobal Variables: "
-            for key in self.variables.keys():
-                result_str += "\n{}{}".format(nest(1), self.variables[key])
+        # if len(self.variables) > 0:
+        #     result_str += "\nGlobal Variables: "
+        #     for key in self.variables.keys():
+        #         result_str += "\n{}{}".format(nest(1), self.variables[key])
         return result_str
 
     def print_lines(self):
