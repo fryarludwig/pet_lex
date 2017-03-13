@@ -66,7 +66,6 @@ class FileStructure:
             return False
 
     def determine_type(self, line):
-        line_type = None
         if RE_FUNCTION_DECL.match(line) is not None:
             return "function", Function(RE_FUNCTION_DECL.match(line).groupdict())
         if RE_CLASS_DECL.match(line) is not None:
@@ -81,7 +80,6 @@ class FileStructure:
 
         while line_number < line_count:
             line = self.lines[line_number]
-
             line_type, mystery_object = self.determine_type(line)
 
             if line_type == "None":
@@ -93,10 +91,7 @@ class FileStructure:
                 line_number = self.parse_class(line_number, mystery_object)
             elif line_type == "function":
                 self.functions[mystery_object.name] = mystery_object
-                line_number += 1
-
             line_number += 1
-
         return str(self)
 
     def get_function(self, line):
@@ -126,31 +121,26 @@ class FileStructure:
 
         while current_line < len(self.lines) and class_scope > 0:
             line = self.lines[current_line]
-
+            line_type, mystery_object = self.determine_type(line)
             class_scope += line.count('}') - line.count('}')
-            print class_scope
-
             current_line += 1
 
-            line_type, mystery_object = self.determine_type(line)
-
             if line_type == 'function':
-                line_number = self.parse_function(line_number, mystery_object)
+                class_obj.functions[mystery_object.name] = mystery_object
+                current_line = self.parse_function(line_number, mystery_object)
             elif line_type == 'variable':
-                line_number += 1
+                current_line += 1
                 class_obj.variables[mystery_object.name] = mystery_object
-                continue
-
         return current_line
 
-    def parse_function(self, line_number, func):
+    def parse_function(self, line_number, func_obj):
         current_line = line_number
         func_scope = 0
 
         while current_line < len(self.lines) and func_scope > 0:
             line = self.lines[current_line]
 
-            print "In class {}".format(class_obj.name)
+            print "In function {}".format(func_obj.name)
 
             func_scope += line.count('}') - line.count('}')
             print func_scope
@@ -159,12 +149,12 @@ class FileStructure:
 
             temp_obj = self.get_function(line)
             if temp_obj is not None:
-                self.functions[temp_obj.name] = temp_obj
+                func_obj.functions[temp_obj.name] = temp_obj
                 continue
 
             temp_obj = self.get_variable(line)
             if temp_obj is not None:
-                self.variables[temp_obj.name] = temp_obj
+                func_obj.variables[temp_obj.name] = temp_obj
                 continue
 
         return current_line
@@ -174,11 +164,11 @@ class FileStructure:
         result_str = "File: {}".format(self.file_name)
         result_str += "\nClasses contained: "
         for key in self.classes.keys():
-            result_str += "\n{}{}".format(nest(1), self.classes[key])
-        if len(self.functions) > 0:
-            result_str += "\nFunctions: "
-            for key in self.functions.keys():
-                result_str += "\n{}{}".format(nest(1), self.functions[key])
+            result_str += "\n{}".format(self.classes[key])
+        # if len(self.functions) > 0:
+        #     result_str += "\nFunctions: "
+        #     for key in self.functions.keys():
+        #         result_str += "\n{}{}".format(nest(1), self.functions[key])
         # if len(self.variables) > 0:
         #     result_str += "\nGlobal Variables: "
         #     for key in self.variables.keys():
@@ -226,7 +216,6 @@ class Function():
             result_str += "\n{}Variables".format(nest(2))
             for var in self.variables.items():
                 result_str += "\n{} Local Variable: {}".format(nest(3), var)
-
         return result_str
 
 
@@ -241,13 +230,17 @@ class Class():
     def __str__(self):
         result_str = "{}Class: {}, access: {}".format(nest(1), self.name, self.access)
         if len(self.variables) > 0:
-            print "\n{}Member Variables: ".format(nest(1))
+            result_str +=  "\n{}Member Variables: ".format(nest(2))
             for key in self.variables.keys():
                 result_str += "\n{}Variable: {}".format(nest(2), self.variables[key])
+        else:
+            result_str +=  "\n{}No member variables".format(nest(2))
         if len(self.functions) > 0:
-            print "\n{}Member Functions:".format(nest(1))
+            result_str +=  "\n{}Member Functions:".format(nest(2))
             for key in self.functions.keys():
                 result_str += "\n{}Function: {}".format(nest(2), self.functions[key])
+        else:
+            result_str +=  "\n{}No member functions".format(nest(2))
         return result_str
 
 def main_loop():
