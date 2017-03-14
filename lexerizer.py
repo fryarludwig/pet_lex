@@ -14,15 +14,13 @@ RE_BLOCK_COMMENT_END = "(?P<comment>^.*\*/$)"
 
 RE_COMPARATOR = "(?P<compar>[=<>]=)"
 RE_PUNCT = "(?P<punct>[=<>?]+)"
-
 # RE_ENDMARKER = ""
 
 RE_CLASS_DECL = re.compile("(?P<access>public|private|protected(\s+static)?)\s+class\s+(?P<name>[a-zA-Z]\w+)")
 RE_FUNCTION_DECL = re.compile("(?P<access>(public|private|protected)(\s+static)?)\s+(?P<ret_type>\w+)\s+(?P<name>\w+)\((?P<params>.*)\)")
 RE_IDENTIFIER = re.compile("(?P<type>[a-zA-Z]\w+)\s{1,}(?P<name>[a-zA-Z]\w*)(\s*=\s*(?P<value>[\"'\w]+))?\s*;")
 RE_FUNC_PARAMS = re.compile("((?P<type>[a-zA-Z][\w\[\]]+)\s+(?P<name>\w+)\s*(=\s*(?P<value>[\w'\"]+))?(,\s*)?)")
-
-RE_SANITIZE_LINES = re.compile("((?P<comment>[/]{2}.*$)|(^\s+)|(\s+$))")
+RE_SANITIZE_LINES = re.compile("(?P<comment>[/]{2}.*$)|(^\s+|\s+$)")
 
 # TEST_FILE = "HelloWorld.java"
 TEST_FILE = "test_input.java"
@@ -118,44 +116,45 @@ class FileStructure:
     def parse_class(self, line_number, class_obj):
         current_line = line_number
         class_scope = 0
-
-        while current_line < len(self.lines) and class_scope > 0:
+        while current_line < len(self.lines):
             line = self.lines[current_line]
             line_type, mystery_object = self.determine_type(line)
-            class_scope += line.count('}') - line.count('}')
-            current_line += 1
+            class_scope += line.count('{') - line.count('}')
+            # print line
+            # print class_scope
+            # current_line += 1
+
+            if class_scope <= 0:
+                break
 
             if line_type == 'function':
                 class_obj.functions[mystery_object.name] = mystery_object
-                current_line = self.parse_function(line_number, mystery_object)
+                current_line = self.parse_function(current_line, mystery_object)
             elif line_type == 'variable':
                 current_line += 1
                 class_obj.variables[mystery_object.name] = mystery_object
+            else:
+                current_line += 1
+
+            # current_line += 1
         return current_line
 
     def parse_function(self, line_number, func_obj):
         current_line = line_number
         func_scope = 0
-
-        while current_line < len(self.lines) and func_scope > 0:
+        while current_line < len(self.lines):
             line = self.lines[current_line]
+            line_type, mystery_object = self.determine_type(line)
+            func_scope += line.count('{') - line.count('}')
+            # print line
 
-            print "In function {}".format(func_obj.name)
-
-            func_scope += line.count('}') - line.count('}')
-            print func_scope
-
-            current_line += 1
-
-            temp_obj = self.get_function(line)
-            if temp_obj is not None:
-                func_obj.functions[temp_obj.name] = temp_obj
-                continue
+            if func_scope <= 0:
+                break
 
             temp_obj = self.get_variable(line)
             if temp_obj is not None:
                 func_obj.variables[temp_obj.name] = temp_obj
-                continue
+            current_line += 1
 
         return current_line
 
@@ -207,15 +206,13 @@ class Function():
         return var_list
 
     def __str__(self):
-        result_str = "{}{} - Function: {}, Returns: {} ".format(nest(1), self.access, self.name, self.return_type)
+        result_str = "Name: {}, Access: {}, Returns: {} ".format(self.name, self.access, self.return_type)
         if self.params is not None and len(self.params) > 0:
-            result_str += "\n{}Parameters: ".format(nest(2))
             for var in self.params:
-                result_str += "\n{}{}".format(nest(3), var)
+                result_str += "\n{}Parameter: {}".format(nest(3), var)
         if len(self.variables) > 0:
-            result_str += "\n{}Variables".format(nest(2))
-            for var in self.variables.items():
-                result_str += "\n{} Local Variable: {}".format(nest(3), var)
+            for key in self.variables.keys():
+                result_str += "\n{}Local Variable: {}".format(nest(3), self.variables[key])
         return result_str
 
 
@@ -228,19 +225,19 @@ class Class():
         self.variables = {}
 
     def __str__(self):
-        result_str = "{}Class: {}, access: {}".format(nest(1), self.name, self.access)
+        result_str = "{}Class: {}, access: {}".format(nest(0), self.name, self.access)
         if len(self.variables) > 0:
-            result_str +=  "\n{}Member Variables: ".format(nest(2))
+            result_str +=  "\n{}Member Variables: ".format(nest(1))
             for key in self.variables.keys():
                 result_str += "\n{}Variable: {}".format(nest(2), self.variables[key])
         else:
-            result_str +=  "\n{}No member variables".format(nest(2))
+            result_str +=  "\n{}No member variables".format(nest(1))
         if len(self.functions) > 0:
-            result_str +=  "\n{}Member Functions:".format(nest(2))
+            result_str +=  "\n{}Member Functions:".format(nest(1))
             for key in self.functions.keys():
                 result_str += "\n{}Function: {}".format(nest(2), self.functions[key])
         else:
-            result_str +=  "\n{}No member functions".format(nest(2))
+            result_str +=  "\n{}No member functions".format(nest(1))
         return result_str
 
 def main_loop():
