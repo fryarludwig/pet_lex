@@ -1,3 +1,7 @@
+// Kenny Fryar-Ludwig
+// A01284981
+// CS 4700
+
 public class HelloWorld {
     public static void main(String[]  args) {
         System.out.println("Hello, World");
@@ -6,10 +10,23 @@ public class HelloWorld {
     }
 }
 public class HelloWorldError {
+    public int member_var1;
+    private int member_var2 = 33;
+    protected String[] member_var3 = "test_string";
     public static void main(String[] largs1) {
         System.out.println("Hello, World");
     }
 }
+
+public int global_var;
+public static int global_factorial(int x) {
+    if (x <= 0) {
+    return -1;
+    } else if (x == 0) {
+    return 1;
+    } else {
+    return x * factorial(x – 1);
+    }
 
 public class Math {
     public static int factorial(int x) {
@@ -54,3 +71,6 @@ public class NoError2 {
 }
 // }
 
+// Kenny Fryar-Ludwig
+// A01284981
+// CS 4700

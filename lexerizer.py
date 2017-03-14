@@ -1,54 +1,59 @@
+# Kenny Fryar-Ludwig
+# A01284981
+# CS 4700
+
 import re
 import os
+import datetime
 
 # https://regex101.com/r/vitR4W/1
 
 RE_ASSINGMENT = ""
-RE_LITERAL = "(?P<lit>[-]?[0-9]+)"
 RE_LITERAL_ASSGN = "(?P<assign>[\w]+\s*=\s*)?(?P<lit>[-]?[0-9]+)"
-RE_KEYWORD = ""
 RE_OP_DELIM = ""
 RE_INPUT_END = ""
 RE_BLOCK_COMMENT_START = "(?P<comment>/\*.*$)"
 RE_BLOCK_COMMENT_END = "(?P<comment>^.*\*/$)"
 
+
+RE_KEYWORD = "\W(?P<keyword>public|private|protected|static|return|System\.[\w.]+|class|else\s+if|if|else)\W"
+RE_LITERAL = "(?P<lit>([-]?[0-9]+|[\'\"][\w\s]+[\'\"])"
+
 RE_COMPARATOR = "(?P<compar>[=<>]=)"
 RE_PUNCT = "(?P<punct>[=<>?]+)"
-# RE_ENDMARKER = ""
-
 RE_CLASS_DECL = re.compile("(?P<access>public|private|protected(\s+static)?)\s+class\s+(?P<name>[a-zA-Z]\w+)")
 RE_FUNCTION_DECL = re.compile("(?P<access>(public|private|protected)(\s+static)?)\s+(?P<ret_type>\w+)\s+(?P<name>\w+)\((?P<params>.*)\)")
-RE_IDENTIFIER = re.compile("(?P<type>[a-zA-Z]\w+)\s{1,}(?P<name>[a-zA-Z]\w*)(\s*=\s*(?P<value>[\"'\w]+))?\s*;")
+RE_IDENTIFIER = re.compile("(?P<access>(protected|private|public)(\s+static)?)\s+(?P<type>[a-zA-Z][\w\[\]]*)\s+(?P<name>[a-zA-Z]\w*)(\s*=\s*(?P<value>[\"'\w]+))?\s*;")
 RE_FUNC_PARAMS = re.compile("((?P<type>[a-zA-Z][\w\[\]]+)\s+(?P<name>\w+)\s*(=\s*(?P<value>[\w'\"]+))?(,\s*)?)")
 RE_SANITIZE_LINES = re.compile("(?P<comment>[/]{2}.*$)|(^\s+|\s+$)")
 
 # TEST_FILE = "HelloWorld.java"
 TEST_FILE = "test_input.java"
 
-"""
-
-    Are we starting a class?
-    Are we starting a function?
-    Are we creating a variable?
-        Is it initialized?
-    Are we returning a value?
-    Are we comparing values?
-    Are we performing if/else?
-    Is the function over?
-
-"""
-
 def nest(level):
-    return "".ljust(level * 4)
+    return "".ljust((1 + level) * 4)
+
+def output_error(error_text):
+    print 'ERROR - "{}"'.format(error_text)
+
+class Expression:
+    def __init__(self, expr_type, value):
+        self.type = expr_type
+        self.value = value
+
+    def __str__(self):
+        return '{} {}'.format(self.type.upper(), self.value)
 
 class FileStructure:
     def __init__(self, file_name):
         self.classes = {}
-        self.functions = {}
-        self.variables = {}
+        self.global_functions = {}
+        self.global_variables = {}
         self.lines = []
         self.file_name = file_name
         self.is_valid = self.input_file(file_name)
+
+        self.expressions = []
 
     def input_file(self, file_name):
         if os.path.exists(file_name):
@@ -61,6 +66,7 @@ class FileStructure:
             return True
         else:
             self.lines = []
+            output_error("File could not be read, check the file path, read permissions, and/or contents")
             return False
 
     def determine_type(self, line):
@@ -75,36 +81,20 @@ class FileStructure:
     def parse_file(self):
         line_count = len(self.lines)
         line_number = 0
-
         while line_number < line_count:
-            line = self.lines[line_number]
-            line_type, mystery_object = self.determine_type(line)
-
-            if line_type == "None":
-                line_number += 1
-                continue
-
+            line_type, mystery_object = self.determine_type(self.lines[line_number])
             if line_type == "class":
                 self.classes[mystery_object.name] = mystery_object
                 line_number = self.parse_class(line_number, mystery_object)
             elif line_type == "function":
-                self.functions[mystery_object.name] = mystery_object
+                self.global_functions[mystery_object.name] = mystery_object
+                line_number = self.parse_function(line_number, mystery_object)
+            elif line_type == "variable":
+                self.global_variables[mystery_object.name] = mystery_object
+            else:
+                output_error("Line could not be processed:\n{}".format(self.lines[line_number]))
             line_number += 1
         return str(self)
-
-    def get_function(self, line):
-        temp_obj = None
-        regex_results = RE_FUNCTION_DECL.match(line)
-        if regex_results is not None:
-            temp_obj = Function(regex_results.groupdict())
-        return temp_obj
-
-    def get_class(self, line):
-        temp_obj = None
-        regex_results = RE_CLASS_DECL.match(line)
-        if regex_results is not None:
-            temp_obj = Class(regex_results.groupdict())
-        return temp_obj
 
     def get_variable(self, line):
         temp_obj = None
@@ -120,9 +110,6 @@ class FileStructure:
             line = self.lines[current_line]
             line_type, mystery_object = self.determine_type(line)
             class_scope += line.count('{') - line.count('}')
-            # print line
-            # print class_scope
-            # current_line += 1
 
             if class_scope <= 0:
                 break
@@ -135,8 +122,6 @@ class FileStructure:
                 class_obj.variables[mystery_object.name] = mystery_object
             else:
                 current_line += 1
-
-            # current_line += 1
         return current_line
 
     def parse_function(self, line_number, func_obj):
@@ -146,32 +131,27 @@ class FileStructure:
             line = self.lines[current_line]
             line_type, mystery_object = self.determine_type(line)
             func_scope += line.count('{') - line.count('}')
-            # print line
-
             if func_scope <= 0:
                 break
-
-            temp_obj = self.get_variable(line)
-            if temp_obj is not None:
-                func_obj.variables[temp_obj.name] = temp_obj
+            temp_variable = self.get_variable(line)
+            if temp_variable is not None:
+                func_obj.variables[temp_variable.name] = temp_variable
             current_line += 1
-
         return current_line
-
 
     def __str__(self):
         result_str = "File: {}".format(self.file_name)
         result_str += "\nClasses contained: "
         for key in self.classes.keys():
             result_str += "\n{}".format(self.classes[key])
-        # if len(self.functions) > 0:
-        #     result_str += "\nFunctions: "
-        #     for key in self.functions.keys():
-        #         result_str += "\n{}{}".format(nest(1), self.functions[key])
-        # if len(self.variables) > 0:
-        #     result_str += "\nGlobal Variables: "
-        #     for key in self.variables.keys():
-        #         result_str += "\n{}{}".format(nest(1), self.variables[key])
+        if len(self.global_functions.keys()) > 0:
+            result_str += "\nGlobal functions contained: "
+            for key in self.global_functions.keys():
+                result_str += "\n{}{}".format(nest(1), self.global_functions[key])
+        if len(self.global_variables.keys()) > 0:
+            result_str += "\nGlobal variables contained: "
+            for key in self.global_variables.keys():
+                result_str += "\n{}{}".format(nest(1), self.global_variables[key])
         return result_str
 
     def print_lines(self):
@@ -181,11 +161,12 @@ class FileStructure:
 class Var():
     def __init__(self, val_dict):
         self.name = val_dict['name'] if 'name' in val_dict else "N/A"
+        self.access = val_dict['access'] if 'access' in val_dict else "Local"
         self.type = val_dict['type'] if 'type' in val_dict else "N/A"
         self.value = val_dict['value'] if 'value' in val_dict else "N/A"
 
     def __str__(self):
-        return "Type: {}, Name: {}, Value: {}".format(self.type, self.name, self.value)
+        return "Type: {}, Name: {}, Value: {}, Access: {}".format(self.type, self.name, self.value, self.access)
 
 class Function():
     def __init__(self, val_dict):
@@ -224,46 +205,41 @@ class Class():
         self.functions = {}
         self.variables = {}
 
+    def emit_expressions(self):
+        result_str = "{}Class: {}, access: {}".format(nest(0), self.name, self.access)
+        if len(self.variables) > 0:
+            result_str +=  "\n{}Member Variables: ".format(nest(1))
+            for key in self.variables.keys():
+                result_str += "\n{}Variable: {}".format(nest(2), self.variables[key])
+        if len(self.functions) > 0:
+            result_str +=  "\n{}Member Functions:".format(nest(1))
+            for key in self.functions.keys():
+                result_str += "\n{}Function: {}".format(nest(2), self.functions[key])
+        return result_str
+
     def __str__(self):
         result_str = "{}Class: {}, access: {}".format(nest(0), self.name, self.access)
         if len(self.variables) > 0:
             result_str +=  "\n{}Member Variables: ".format(nest(1))
             for key in self.variables.keys():
                 result_str += "\n{}Variable: {}".format(nest(2), self.variables[key])
-        else:
-            result_str +=  "\n{}No member variables".format(nest(1))
         if len(self.functions) > 0:
             result_str +=  "\n{}Member Functions:".format(nest(1))
             for key in self.functions.keys():
                 result_str += "\n{}Function: {}".format(nest(2), self.functions[key])
-        else:
-            result_str +=  "\n{}No member functions".format(nest(1))
         return result_str
 
 def main_loop():
     input_file = FileStructure(TEST_FILE)
     if input_file.is_valid:
+        print 'Starting file operations at {}'.format(datetime.datetime.now().strftime("%I:%M:%S %p"))
         print input_file.parse_file()
+        print 'Processing completed at {}'.format(datetime.datetime.now().strftime("%I:%M:%S %p"))
     else:
         print "Error: Empty or non-existent file"
 
-
 main_loop()
 
-"""
-    Alright, per line:
-        Is the line empty or just whitespace?
-            Skip
-        Is the line one char?
-            Open or closing bracket?
-                Open - Let's mark that as a new scope
-                Close - Close off the most recent scope
-        Is it a class?
-
-        Is it a function?
-
-        Is it an assignment or declaration?
-
-        Does it have literal?
-"""
-
+# Kenny Fryar-Ludwig
+# A01284981
+# CS 4700
