@@ -6,8 +6,6 @@ import re
 import os
 import datetime
 
-# https://regex101.com/r/vitR4W/1
-
 RE_ASSINGMENT = ""
 RE_LITERAL_ASSGN = "(?P<assign>[\w]+\s*=\s*)?(?P<lit>[-]?[0-9]+)"
 RE_OP_DELIM = ""
@@ -17,10 +15,13 @@ RE_BLOCK_COMMENT_END = "(?P<comment>^.*\*/$)"
 
 
 RE_KEYWORD = "\W(?P<keyword>public|private|protected|static|return|System\.[\w.]+|class|else\s+if|if|else)\W"
-RE_LITERAL = "(?P<lit>([-]?[0-9]+|[\'\"][\w\s]+[\'\"])"
+RE_LITERAL = "\W(?P<lit>([-]?[0-9]+|[\'\"][\w\s]+[\'\"])\W"
 
 RE_COMPARATOR = "(?P<compar>[=<>]=)"
 RE_PUNCT = "(?P<punct>[=<>?]+)"
+
+RE_LONGER_VAR_OP_VAL_N = re.compile("(?P<name>[a-zA-Z]\w*)(\s*(?P<op>(?P<compare>([<>]=?)|==)|(?P<assign>=)|(?P<math>[*\-+/]))\s*(?P<value>[\"'\w]+))+")
+
 RE_CLASS_DECL = re.compile("(?P<access>public|private|protected(\s+static)?)\s+class\s+(?P<name>[a-zA-Z]\w+)")
 RE_FUNCTION_DECL = re.compile("(?P<access>(public|private|protected)(\s+static)?)\s+(?P<ret_type>\w+)\s+(?P<name>\w+)\((?P<params>.*)\)")
 RE_IDENTIFIER = re.compile("(?P<access>(protected|private|public)(\s+static)?)\s+(?P<type>[a-zA-Z][\w\[\]]*)\s+(?P<name>[a-zA-Z]\w*)(\s*=\s*(?P<value>[\"'\w]+))?\s*;")
@@ -77,6 +78,26 @@ class FileStructure:
         if RE_IDENTIFIER.match(line) is not None:
             return "variable", Var(RE_IDENTIFIER.match(line).groupdict())
         return "None", None
+
+    def extract_expressions(self):
+        for line in self.lines:
+            line_matches = RE_LITERAL
+
+
+        while line_number < line_count:
+            line_type, mystery_object = self.determine_type(self.lines[line_number])
+            if line_type == "class":
+                self.classes[mystery_object.name] = mystery_object
+                line_number = self.parse_class(line_number, mystery_object)
+            elif line_type == "function":
+                self.global_functions[mystery_object.name] = mystery_object
+                line_number = self.parse_function(line_number, mystery_object)
+            elif line_type == "variable":
+                self.global_variables[mystery_object.name] = mystery_object
+            else:
+                output_error("Line could not be processed:\n{}".format(self.lines[line_number]))
+            line_number += 1
+        return str(self)
 
     def parse_file(self):
         line_count = len(self.lines)
